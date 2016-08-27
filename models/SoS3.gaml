@@ -11,9 +11,14 @@ model SoS
 global{
 //	float step <- 1 #minutes;
 	
-	int nCar<-30;
-	int nAmbulance<-0;
+	int maxCycle<-1000;
+	int nCar<-15;
+	int nAmbulance<-5;
 	int nHospital<-5;
+	int policy<-3;
+	// Policy1 : 제일 가까운 patient 를 고름
+	// Policy2: 환자가 생기는 순서대로 구하기
+	// Policy3: 환자의 생명력이 짧은 순서대로 구하기
 	
 	int maxSearchDistance <- 2000;
 	int privateCarSearchDistance <- 20;
@@ -71,7 +76,7 @@ global{
   	
   	reflex makePatient{
   		if(flip(makePatientProbability)){
-  			write "make patient!";
+  			// creation log is moved to init() of Patient species
   			create patient {
   				building bd<-one_of(building);
   				location<- bd.location;
@@ -83,9 +88,9 @@ global{
   	reflex stop{
   		int cycle_ <- cycle;
   		
-  		if(cycle > 1000){
+  		if(cycle > maxCycle){
   			write ""+nb_patient_made+" patients made, "+nb_patient_saved_by_ambulance+" patients are saved by ambulance, "
-  				+nb_patient_saved_by_car+" patients are saved by car"+nb_patient_dead+" patients dead.";
+  				+nb_patient_saved_by_car+" patients are saved by car, "+nb_patient_dead+" patients dead.";
   			do pause;
   		}
   		
@@ -119,6 +124,11 @@ species patient skills:[moving]{
 	
 	init{
 		timeAlive <- 100 + rnd(20);
+		if(policy = 3) {
+			write "make patient "+self.name+"! - initial timeAlive: "+timeAlive;
+		} else {
+			write "make patient "+self.name+"!";
+		}
 	}
 	
 	reflex dying{
@@ -247,20 +257,31 @@ species publicAmbulance parent:EmergencyCar {
 		}
 		
 		// 기본 조건: 뭔가 타고 있지 않고, 나랑 위치가 같지 않음. 다른 ambulance 에 의해 target 되지 않음
-		 
-		// Policy 1 : 제일 가까운 patient 를 고름
-		loop d from:1 to:maxSearchDistance{
-			patient candidate <- one_of (patient at_distance d);
-			if (candidate!=nil and !candidate.inHospital and candidate.rideEmergencyCar=nil and !candidate.isTargeted){
+		
+		if(policy = 1) {
+			// Policy 1 : 제일 가까운 patient 를 고름
+			loop d from:1 to:maxSearchDistance{
+				patient candidate <- one_of (patient at_distance d);
+				if (candidate!=nil and !candidate.inHospital and candidate.rideEmergencyCar=nil and !candidate.isTargeted){
+					targetPatient <- candidate;
+					write self.name+": patient "+targetPatient.name+" at distance of "+d+" will be saved by me";
+					break;
+				}
+			}
+		} else if(policy = 2) {
+			// Policy2: 환자가 생기는 순서대로 구하기
+			patient candidate <- first_with (patient, !each.inHospital and each.rideEmergencyCar=nil and !each.isTargeted);
+			targetPatient <- candidate;
+			write self.name+": patient "+targetPatient.name+" will be saved by me by the rule of FIFO";
+		} else if(policy = 3) {
+			// Policy3: 환자의 생명력이 짧은 순서대로 구하기
+			list<patient> sortedlist <- (where(patient, !each.inHospital and each.rideEmergencyCar=nil and !each.isTargeted) sort_by (each.timeAlive));
+			if(length(sortedlist) > 0) {
+				patient candidate <- sortedlist[0];
 				targetPatient <- candidate;
-				write self.name+": patient "+candidate.name+" at distance of "+d+" will be saved by me";
-				break;
+				write self.name+": patient "+targetPatient.name+" with timeAlive of "+targetPatient.timeAlive+" will be saved by me";
 			}
 		}
-		// Policy2: 환자가 생기는 순서대로 구하기
-		// Policy3: 환자의 생명력이 짧은 순서대로 구하기
-		// Policy4: 멀리 있는 환자부터 구하기
-		// Policy5: 구할 수 있을 때만 구하기?
 		
 		if(targetPatient!=nil){
 			ask targetPatient{
@@ -313,7 +334,7 @@ species privateCar parent:EmergencyCar {
 //				break;
 //			}
 //		}
-
+	
 		loop d from:1 to:privateCarSearchDistance{
 			building candidateBuilding <- one_of (building at_distance d);
 			patient candidate <- patient closest_to(self);

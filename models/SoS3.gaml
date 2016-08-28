@@ -11,15 +11,19 @@ model SoS
 global{
 //	float step <- 1 #minutes;
 	
-	int nCar<-30;
-	int nAmbulance<-0;
+	int nCar<-0;
+	int nAmbulance<-3;
+	int nPrivateAmbulance<-3;
 	int nHospital<-5;
 	
 	int maxSearchDistance <- 2000;
 	int privateCarSearchDistance <- 20;
 	
+	int askingPrivateAmbulanceThreshold <- 20;
+	
 	string patientFile const: true <- '../images/patient.jpg' ;
 	string ambulanceFile const: true <- '../images/ambulance.png' ;
+	string pAmbulanceFile const: true <- '../images/pAmbulance.jpg' ;
 	string hospitalFile const: true <- '../images/hospital.png' ;
 	string carFile const: true <- '../images/car.png' ;
 	
@@ -34,8 +38,15 @@ global{
 	
 	int nb_patient_made <- 0;
 	int nb_patient_saved_by_ambulance <- 0;
+	int nb_patient_saved_by_pAmbulance <- 0;
 	int nb_patient_saved_by_car <- 0;
 	int nb_patient_dead <- 0;
+	
+	int costPublicAmbulancePerTick <- 1;
+	int costPrivateAmbulancePerEvent <- 50;
+	
+	int costOfPublicAmbulance <-0;
+	int costOfPrivateAmbulance <-0;
 	
 	init {
 		create road from: roads_shapefile;
@@ -43,28 +54,26 @@ global{
 		
 		create building from: buildings_shapefile; 
 		
-		// 처음에 환자를 안만드는게 나을듯
-//    	create patient number: nPatient { 
-////    	  location <- {rnd(100), rnd(100)};
-//			building bd <- one_of(building);
-//			location <- any_location_in(bd);       
-//    	} 
-
     	create hospital number: nHospital {
     	  building bd <- one_of(building);
 			location <- any_location_in(bd);          
     	}
-//    	create EmergencyCar number: nAmbulance {
 
 		create publicAmbulance number: nAmbulance {
     		speed <- ambulanceSpeed; 
-    	  hospital bd <- one_of(hospital);
+    	  	hospital bd <- one_of(hospital);
 			location <- any_location_in(bd);      
    		}
    		
-   		create privateCar number: nCar {
+   		create privateAmbulance number: nPrivateAmbulance {
     		speed <- ambulanceSpeed; 
-    	  building bd <- one_of(building);
+    	  	building bd <- one_of(building);
+			location <- any_location_in(bd);      
+   		}    
+   		
+   		create privateCar number: nCar {
+    		speed <- carSpeed; 
+    	  	building bd <- one_of(building);
 			location <- any_location_in(bd);      
    		}    
   	}
@@ -116,9 +125,11 @@ species patient skills:[moving]{
 	bool isTargeted;
 	
 	int timeAlive;
+	int waiting;
 	
 	init{
 		timeAlive <- 100 + rnd(20);
+		waiting <- 0;
 	}
 	
 	reflex dying{
@@ -144,6 +155,36 @@ species patient skills:[moving]{
 			do die;
 		}
 		
+		// patient 가 Target 되지 않고 기다린 시간이 일정 시간이상이 되면 private Ambulance (Acknowledged type) 를 부름
+		if(rideEmergencyCar=nil and waitingAmbulance=nil){
+			waiting <- waiting+1;
+			
+			if(waiting > askingPrivateAmbulanceThreshold and nPrivateAmbulance > 0){
+			// private ambulance 요청
+//			privateAmbulance askPAmbulance <- (privateAmbulance) closest_to (self);
+			
+			privateAmbulance askPAmbulance <- nil;
+			
+			loop d from:1 to:maxSearchDistance{
+				privateAmbulance candidate <- one_of (privateAmbulance at_distance d);
+				if (candidate!=nil and candidate.targetPatient=nil and candidate.ridePatient=nil){
+					askPAmbulance <- candidate;
+					write self.name+": "+candidate.name+" at distance of "+d+" will save myself";
+					break;
+				}
+			}
+			
+			if(askPAmbulance!=nil){
+				ask askPAmbulance{
+					targetPatient<-myself;
+				}
+				isTargeted <- true;
+				waitingAmbulance <- askPAmbulance;
+			}
+			}
+		}
+		
+		
 		if(waitingAmbulance!=nil and waitingAmbulance.targetPatient!=self){
 			write "[Error2]: "+self.name+" is waiting "+waitingAmbulance+", but it is not targeting this patient.";
 		}
@@ -152,6 +193,9 @@ species patient skills:[moving]{
 	action recover {
 		if (rideEmergencyCar is publicAmbulance){
 			nb_patient_saved_by_ambulance <- nb_patient_saved_by_ambulance+1;
+		}
+		if (rideEmergencyCar is privateAmbulance){
+			nb_patient_saved_by_pAmbulance <- nb_patient_saved_by_pAmbulance+1;
 		}
 		if (rideEmergencyCar is privateCar){
 			nb_patient_saved_by_car <- nb_patient_saved_by_car+1;
@@ -218,6 +262,10 @@ species EmergencyCar skills:[moving] {
 			do recover;
 		}
 		
+		if(self is privateAmbulance){
+			costOfPrivateAmbulance <- costOfPrivateAmbulance + costPrivateAmbulancePerEvent;
+		}
+		
 		ridePatient <- nil;
 		targetHospital<-nil;
 		targetPatient <- nil;
@@ -230,6 +278,10 @@ species EmergencyCar skills:[moving] {
 }
 
 species publicAmbulance parent:EmergencyCar {
+	reflex cost {
+		costOfPublicAmbulance <- costOfPublicAmbulance + costPublicAmbulancePerTick;
+	}
+	
 	reflex setTarget when: targetPatient = nil and ridePatient = nil {
 		do findTarget;
 	}
@@ -259,8 +311,6 @@ species publicAmbulance parent:EmergencyCar {
 		}
 		// Policy2: 환자가 생기는 순서대로 구하기
 		// Policy3: 환자의 생명력이 짧은 순서대로 구하기
-		// Policy4: 멀리 있는 환자부터 구하기
-		// Policy5: 구할 수 있을 때만 구하기?
 		
 		if(targetPatient!=nil){
 			ask targetPatient{
@@ -272,6 +322,19 @@ species publicAmbulance parent:EmergencyCar {
 	
 	aspect default{
 		draw file(ambulanceFile) size:{20,20};
+	}
+}
+
+species privateAmbulance parent:EmergencyCar {
+	reflex moveToPatient when: targetPatient != nil and ridePatient = nil{
+		do goto target:targetPatient.location on: road_network;//on: road_network;
+		if (location = targetPatient.location) {
+			do pickPatient;
+		}
+	}
+	
+	aspect default{
+		draw file(pAmbulanceFile) size:{20,20};
 	}
 }
 
@@ -348,22 +411,32 @@ experiment exp1 type:gui{
 //	parameter "Initial number of patients: " var: nPatient min: 1 max: 1000 category: "Patients" ;	
 	
   	output {
-    	display View1 type:opengl {
+    	display GUI type:opengl {
     	  	species road aspect:geom;
 			species building aspect:geom;
 			species patient;
     	  	species EmergencyCar;
     	  	species hospital;
     	  	species publicAmbulance;
+    	  	species privateAmbulance;
     	  	species privateCar;
     	}
     	
-    	display chart refresh: every(10) {
-			chart "Disease spreading" type: series {
+    	display PatientChart refresh: every(10) {
+			chart "Patients" type: series {
 				data "patient made" value: nb_patient_made color: #black;
-				data "patient saved by ambulance" value: nb_patient_saved_by_ambulance color: #blue;
+				data "patient saved by public ambulance" value: nb_patient_saved_by_ambulance color: #blue;
+				data "patient saved by private ambulance" value: nb_patient_saved_by_pAmbulance color: #purple;
 				data "patient saved by car" value: nb_patient_saved_by_car color: #green;
 				data "patient dead" value: nb_patient_dead color: #red;
+			}
+		}
+		
+		display CostChart refresh: every(10) {
+			chart "Costs" type: series {
+				data "total costs" value: costOfPrivateAmbulance+costOfPublicAmbulance color: #black;
+				data "costs of public ambulance" value: costOfPublicAmbulance color: #blue;
+				data "costs of private ambulance" value: costOfPrivateAmbulance color: #green;	
 			}
 		}
   	}

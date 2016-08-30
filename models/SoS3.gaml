@@ -14,7 +14,7 @@ global{
 	int nCar<-0;
 	int nAmbulance<-3;
 	int nPrivateAmbulance<-3;
-	int nHospital<-5;
+//	int nHospital<-5;
 	
 	int maxCycle<-1000;
 	int policy<-3;
@@ -60,9 +60,23 @@ global{
 		
 		create building from: buildings_shapefile; 
 		
-    	create hospital number: nHospital {
-    	  building bd <- one_of(building);
-			location <- any_location_in(bd);          
+//    	create hospital number: nHospital {
+//    	  building bd <- one_of(building);
+//			location <- any_location_in(bd);          
+//    	}
+    	
+    	create hospital {
+    		building bd <- (building) closest_to ({414, 342});
+    		location<- any_location_in(bd);
+    	}create hospital {
+    		building bd <- (building) closest_to ({123, 775});
+    		location<- any_location_in(bd);
+    	}create hospital {
+    		building bd <- (building) closest_to ({383, 657});
+    		location<- any_location_in(bd);
+    	}create hospital {
+    		building bd <- (building) closest_to ({630, 683});
+    		location<- any_location_in(bd);
     	}
 
 		create publicAmbulance number: nAmbulance {
@@ -380,27 +394,6 @@ species privateCar parent:EmergencyCar {
 		building closestBuilding <- building closest_to (self);
 		patient closestPatient <- patient closest_to (self);
 		
-//		if(closestPatient.location = closestBuilding.location){
-//			patient candidate <- closestPatient;
-//			if (candidate!=nil and !candidate.inHospital and candidate.rideEmergencyCar=nil and !candidate.isTargeted){
-//				targetPatient <- candidate;
-//				do pickPatient;
-//				write self.name+": patient "+candidate.name+" will be saved by me";
-//			}
-//		}
-		
-		// 근처에 환자가 있으면
-//		loop d from:1 to:privateCarSearchDistance{
-//			patient candidate <- one_of (patient at_distance d);
-//			
-//			if (candidate!=nil and !candidate.inHospital and candidate.rideEmergencyCar=nil and !candidate.isTargeted){
-//				targetPatient <- candidate;
-//				do pickPatient;
-//				write self.name+": patient "+candidate.name+" at distance of "+d+" will be saved by me";
-//				break;
-//			}
-//		}
-	
 		loop d from:1 to:privateCarSearchDistance{
 			building candidateBuilding <- one_of (building at_distance d);
 			patient candidate <- patient closest_to(self);

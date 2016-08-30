@@ -54,6 +54,8 @@ global{
 	int costOfPublicAmbulance <-0;
 	int costOfPrivateAmbulance <-0;
 	
+	bool printLog <- false;
+	
 	init {
 		create road from: roads_shapefile;
 		road_network <- as_edge_graph(road);
@@ -113,8 +115,13 @@ global{
   		int cycle_ <- cycle;
   		
   		if(cycle > maxCycle){
-  			write ""+nb_patient_made+" patients made, "+nb_patient_saved_by_ambulance+" patients are saved by ambulance, "
+  			write ""+nb_patient_made+" patients made, "+nb_patient_saved_by_ambulance+" patients are saved by public ambulance, "
+  				+nb_patient_saved_by_pAmbulance+" patients are saved by private ambulance, "
   				+nb_patient_saved_by_car+" patients are saved by car, "+nb_patient_dead+" patients dead.";
+  				
+  			write "Costs of public ambulance: "+costOfPublicAmbulance+" Costs of private ambulance: "+costOfPrivateAmbulance
+  				+" Total costs: "+(costOfPublicAmbulance+costOfPrivateAmbulance);
+  				
   			do pause;
   		}
   		
@@ -150,10 +157,12 @@ species patient skills:[moving]{
 	init{
 		timeAlive <- 100 + rnd(20);
 		waiting <- 0;
-		if(policy = 3) {
-			write "make patient "+self.name+"! - initial timeAlive: "+timeAlive;
-		} else {
-			write "make patient "+self.name+"!";
+		if(printLog){
+			if(policy = 3) {
+				write "make patient "+self.name+"! - initial timeAlive: "+timeAlive;
+			} else {
+				write "make patient "+self.name+"!";
+			}
 		}
 	}
 	
@@ -163,7 +172,7 @@ species patient skills:[moving]{
 			draw circle(20) color:#red;
 		}
 		if(timeAlive<=0){
-			write self.name+" is dead";
+			if(printLog){write self.name+" is dead";}
 			nb_patient_dead <- nb_patient_dead+1;
 			
 			if(isTargeted){
@@ -194,7 +203,7 @@ species patient skills:[moving]{
 				privateAmbulance candidate <- one_of (privateAmbulance at_distance d);
 				if (candidate!=nil and candidate.targetPatient=nil and candidate.ridePatient=nil){
 					askPAmbulance <- candidate;
-					write self.name+": "+candidate.name+" at distance of "+d+" will save myself";
+					if(printLog){write self.name+": "+candidate.name+" at distance of "+d+" will save myself";}
 					break;
 				}
 			}
@@ -211,7 +220,7 @@ species patient skills:[moving]{
 		
 		
 		if(waitingAmbulance!=nil and waitingAmbulance.targetPatient!=self){
-			write "[Error2]: "+self.name+" is waiting "+waitingAmbulance+", but it is not targeting this patient.";
+			if(printLog){write "[Error2]: "+self.name+" is waiting "+waitingAmbulance+", but it is not targeting this patient.";}
 		}
 	}
 	
@@ -277,11 +286,11 @@ species EmergencyCar skills:[moving] {
 		}
 		targetPatient <- nil;
 		
-		write self.name+": I just pick patient "+ridePatient.name+" and this patient will be delivered to "+targetHospital.name;
+		if(printLog){write self.name+": I just pick patient "+ridePatient.name+" and this patient will be delivered to "+targetHospital.name;}
 	}
 	
 	action releasePatient{
-		write self.name+": "+ridePatient.name+" is delivered to "+targetHospital.name+".";
+		if(printLog){write self.name+": "+ridePatient.name+" is delivered to "+targetHospital.name+".";}
 		
 		ask ridePatient{
 			do recover;
@@ -320,7 +329,7 @@ species publicAmbulance parent:EmergencyCar {
 	
 	action findTarget{
 		if(targetPatient!=nil){
-			write "[ERROR1] "+self.name+" has target patient, but it is trying to find target.";
+			if(printLog){write "[ERROR1] "+self.name+" has target patient, but it is trying to find target.";}
 		}
 		
 		// 기본 조건: 뭔가 타고 있지 않고, 나랑 위치가 같지 않음. 다른 ambulance 에 의해 target 되지 않음
@@ -331,7 +340,7 @@ species publicAmbulance parent:EmergencyCar {
 				patient candidate <- one_of (patient at_distance d);
 				if (candidate!=nil and !candidate.inHospital and candidate.rideEmergencyCar=nil and !candidate.isTargeted){
 					targetPatient <- candidate;
-					write self.name+": patient "+targetPatient.name+" at distance of "+d+" will be saved by me";
+					if(printLog){write self.name+": patient "+targetPatient.name+" at distance of "+d+" will be saved by me";}
 					break;
 				}
 			}
@@ -339,14 +348,14 @@ species publicAmbulance parent:EmergencyCar {
 			// Policy2: 환자가 생기는 순서대로 구하기
 			patient candidate <- first_with (patient, !each.inHospital and each.rideEmergencyCar=nil and !each.isTargeted);
 			targetPatient <- candidate;
-			write self.name+": patient "+targetPatient.name+" will be saved by me by the rule of FIFO";
+			if(printLog){write self.name+": patient "+targetPatient.name+" will be saved by me by the rule of FIFO";}
 		} else if(policy = 3) {
 			// Policy3: 환자의 생명력이 짧은 순서대로 구하기
 			list<patient> sortedlist <- (where(patient, !each.inHospital and each.rideEmergencyCar=nil and !each.isTargeted) sort_by (each.timeAlive));
 			if(length(sortedlist) > 0) {
 				patient candidate <- sortedlist[0];
 				targetPatient <- candidate;
-				write self.name+": patient "+targetPatient.name+" with timeAlive of "+targetPatient.timeAlive+" will be saved by me";
+				if(printLog){write self.name+": patient "+targetPatient.name+" with timeAlive of "+targetPatient.timeAlive+" will be saved by me";}
 			}
 		}
 		
@@ -403,7 +412,7 @@ species privateCar parent:EmergencyCar {
 				if (candidate!=nil and !candidate.inHospital and candidate.rideEmergencyCar=nil and !candidate.isTargeted){
 					targetPatient <- candidate;
 					do pickPatient;
-					write self.name+": patient "+candidate.name+" at distance of "+d+" will be saved by me";
+					if(printLog){write self.name+": patient "+candidate.name+" at distance of "+d+" will be saved by me";}
 					break;
 				}				
 			}

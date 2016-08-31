@@ -431,7 +431,34 @@ species privateCar parent:EmergencyCar {
 	}
 }
 
-
+experiment 'Batch Exp' type:gui {
+	//Parameters for simulation 0
+	parameter name:"nCar:" var:nCar init:0;
+	parameter name:"nAmbulance:" var:nAmbulance init:5;
+	parameter name:"nPrivateAmbulance:" var:nPrivateAmbulance init:0;
+//	parameter name:"nHospital:" var:nPrivateAmbulance init:0;
+	parameter name:"policy:" var:policy init:1;
+	
+	init {
+		create simulation with:[nCar::0, nAmbulance::5, nPrivateAmbulance::0, policy::2]; //sim 1
+		create simulation with:[nCar::0, nAmbulance::5, nPrivateAmbulance::0, policy::3]; //sim 2
+		create simulation with:[nCar::10, nAmbulance::5, nPrivateAmbulance::0, policy::1]; //sim 3
+		create simulation with:[nCar::10, nAmbulance::5, nPrivateAmbulance::0, policy::2]; //sim 4
+		create simulation with:[nCar::10, nAmbulance::5, nPrivateAmbulance::0, policy::3]; //sim 5
+	}
+	
+	output {
+		display PatientChart refresh: every(10) {
+			chart "Patients" type: series {
+				data "patient made" value: nb_patient_made color: #black;
+				data "patient saved by public ambulance" value: nb_patient_saved_by_ambulance color: #blue;
+				data "patient saved by private ambulance" value: nb_patient_saved_by_pAmbulance color: #purple;
+				data "patient saved by car" value: nb_patient_saved_by_car color: #green;
+				data "patient dead" value: nb_patient_dead color: #red;
+			}
+		}
+	}
+}
 
 experiment exp1 type:gui{
 //	parameter "Initial number of patients: " var: nPatient min: 1 max: 1000 category: "Patients" ;	

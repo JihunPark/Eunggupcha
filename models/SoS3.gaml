@@ -10,7 +10,7 @@ model SoS
 
 global{
 //	float step <- 1 #minutes;
-	
+	int reflexCnt <-0; //Batch test purpose
 	int nCar<-0;
 	int nAmbulance<-3;
 	int nPrivateAmbulance<-3;
@@ -101,6 +101,7 @@ global{
   	}
   	
   	reflex makePatient{
+  		reflexCnt<- reflexCnt + 1;
   		if(flip(makePatientProbability)){
   			// creation log is moved to init() of Patient species
   			create patient {
@@ -109,22 +110,6 @@ global{
   				nb_patient_made <- nb_patient_made+1;
   			}
   		}
-  	}
-  	
-  	reflex stop{
-  		int cycle_ <- cycle;
-  		
-  		if(cycle > maxCycle){
-  			write ""+nb_patient_made+" patients made, "+nb_patient_saved_by_ambulance+" patients are saved by public ambulance, "
-  				+nb_patient_saved_by_pAmbulance+" patients are saved by private ambulance, "
-  				+nb_patient_saved_by_car+" patients are saved by car, "+nb_patient_dead+" patients dead.";
-  				
-  			write "Costs of public ambulance: "+costOfPublicAmbulance+" Costs of private ambulance: "+costOfPrivateAmbulance
-  				+" Total costs: "+(costOfPublicAmbulance+costOfPrivateAmbulance);
-  				
-  			do pause;
-  		}
-  		
   	}
 }
 
@@ -447,6 +432,26 @@ experiment 'Batch Exp' type:gui {
 		create simulation with:[nCar::10, nAmbulance::5, nPrivateAmbulance::0, policy::3]; //sim 5
 	}
 	
+  	reflex stop{
+  		if(cycle >= 100){
+  			write "Stop cycle: " + cycle;
+  			loop sim over: SoS_model {
+  				write sim.name + " // nCar: " + sim.nCar + ", nAmbulance: " + sim.nAmbulance + ", Policy: " + sim.policy + ", reflexCnt: " + sim.reflexCnt;
+//	  			write ""+nb_patient_made+" patients made, "+nb_patient_saved_by_ambulance+" patients are saved by public ambulance, "
+//	  				+nb_patient_saved_by_pAmbulance+" patients are saved by private ambulance, "
+//	  				+nb_patient_saved_by_car+" patients are saved by car, "+nb_patient_dead+" patients dead.";
+//	  				
+//	  			write "Costs of public ambulance: "+costOfPublicAmbulance+" Costs of private ambulance: "+costOfPrivateAmbulance
+//	  				+" Total costs: "+(costOfPublicAmbulance+costOfPrivateAmbulance);
+	  				
+	  			//save [name, location, host] to: "save_data.csv" type: "csv";
+	  			ask sim {
+	  				do pause;
+	  			}
+	  		}
+  		}
+  	}
+
 	output {
 		display PatientChart refresh: every(10) {
 			chart "Patients" type: series {

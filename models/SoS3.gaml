@@ -433,36 +433,40 @@ experiment 'Batch Exp' type:gui {
 	}
 	
   	reflex stop{
-  		if(cycle >= 100){
-  			write "Stop cycle: " + cycle;
+  		if(cycle >= 1000){
+  			date firstdate <- date("2016-8-31T0:00:0+09:00");
+  			date today <- date("now");
+  			string resultID <- string(int(today - firstdate)); // generate unique ID for result file based on date
+  			string filename <- resultID + "_result.csv";
+  			
+  			// create a result file
+			save ["Simulation", "Policy", "n_Public_Ambulance", "n_Private_Ambulance", "n_Car", "Patients_Made",
+				  "Public_Ambulance_Saved", "Private_Ambulance_Saved", "Car_Saved",
+				  "Dead", "Alive",
+				  "Public_Ambulance_Cost", "Private_Ambulance_Cost", "Total_Cost"
+				 ] to:filename type:"csv" header:false; // useful facet - rewrite: true
+				 
   			loop sim over: SoS_model {
-  				write sim.name + " // nCar: " + sim.nCar + ", nAmbulance: " + sim.nAmbulance + ", Policy: " + sim.policy + ", reflexCnt: " + sim.reflexCnt;
-//	  			write ""+nb_patient_made+" patients made, "+nb_patient_saved_by_ambulance+" patients are saved by public ambulance, "
-//	  				+nb_patient_saved_by_pAmbulance+" patients are saved by private ambulance, "
-//	  				+nb_patient_saved_by_car+" patients are saved by car, "+nb_patient_dead+" patients dead.";
-//	  				
-//	  			write "Costs of public ambulance: "+costOfPublicAmbulance+" Costs of private ambulance: "+costOfPrivateAmbulance
-//	  				+" Total costs: "+(costOfPublicAmbulance+costOfPrivateAmbulance);
-	  				
-	  			//save [name, location, host] to: "save_data.csv" type: "csv";
+				write ""+nb_patient_made+" patients made, "+nb_patient_saved_by_ambulance+" patients are saved by public ambulance, "
+	  				+nb_patient_saved_by_pAmbulance+" patients are saved by private ambulance, "
+	  				+nb_patient_saved_by_car+" patients are saved by car, "+nb_patient_dead+" patients dead.";
+	  			
+	  			write "Costs of public ambulance: "+costOfPublicAmbulance+" Costs of private ambulance: "+costOfPrivateAmbulance
+	  				+" Total costs: "+(costOfPublicAmbulance+costOfPrivateAmbulance);
+	  			
+	  			save [sim.name, sim.policy, sim.nAmbulance, sim.nPrivateAmbulance, sim.nCar, sim.nb_patient_made,
+	  				  sim.nb_patient_saved_by_ambulance, sim.nb_patient_saved_by_pAmbulance, sim.nb_patient_saved_by_car,
+					  sim.nb_patient_dead, length(sim.patient),
+	  				  sim.costOfPublicAmbulance, sim.costOfPrivateAmbulance, (sim.costOfPublicAmbulance+sim.costOfPrivateAmbulance)
+	  				 ] to:filename type:"csv" header:false;
+	  			
 	  			ask sim {
 	  				do pause;
 	  			}
 	  		}
+	  		
   		}
   	}
-
-	output {
-		display PatientChart refresh: every(10) {
-			chart "Patients" type: series {
-				data "patient made" value: nb_patient_made color: #black;
-				data "patient saved by public ambulance" value: nb_patient_saved_by_ambulance color: #blue;
-				data "patient saved by private ambulance" value: nb_patient_saved_by_pAmbulance color: #purple;
-				data "patient saved by car" value: nb_patient_saved_by_car color: #green;
-				data "patient dead" value: nb_patient_dead color: #red;
-			}
-		}
-	}
 }
 
 experiment exp1 type:gui{

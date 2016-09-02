@@ -9,21 +9,40 @@
 model SoS
 
 experiment 'Batch Exp' type:gui {
-	int maxCycle <- 1000;
+	int maxCycle <- 10000;
+	int nRun <- 10;
 	
-	/* Parameters for simulation 0 */
-	parameter name:"nCar:" var:nCar init:0;
+	/* Fixed Variables */
+	int fixedPolicy <- 2;
+	int fixedNPublicAmbulance <- 6;
+	int fixedNPrivateAmbulance <- 0;
+	int fixedNCar <- 0;
+	float fixedPatientCreationProbability <- 0.20;	
+	
+	/* Discarded Simulation */
+	parameter name:"policy:" var:policy init:0;
 	parameter name:"nPublicAmbulance:" var:nPublicAmbulance init:0;
 	parameter name:"nPrivateAmbulance:" var:nPrivateAmbulance init:0;
-//	parameter name:"nHospital:" var:nPrivateAmbulance init:0;
-	parameter name:"policy:" var:policy init:1;
+	parameter name:"nCar:" var:nCar init:0;
+	parameter name:"patientCreationProbability:" var:patientCreationProbability init:0.00;
 	
 	init {
-		create simulation with:[policy::2, nPublicAmbulance::5, nPrivateAmbulance::0, nCar::0]; //sim 1
-		create simulation with:[policy::3, nPublicAmbulance::5, nPrivateAmbulance::0, nCar::0]; //sim 2
-		create simulation with:[policy::1, nPublicAmbulance::5, nPrivateAmbulance::0, nCar::10]; //sim 3
-		create simulation with:[policy::2, nPublicAmbulance::5, nPrivateAmbulance::0, nCar::10]; //sim 4
-		create simulation with:[policy::3, nPublicAmbulance::5, nPrivateAmbulance::0, nCar::10]; //sim 5
+//		list<float> simParamValues <- [0.00, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45,
+//									   0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95, 1.00];
+		
+		float tNPublic <- 0.00;
+		
+		loop tPolicy from:1 to: 3 {
+			loop tNPublic over: [3, 5, 7, 9, 11] {
+				loop tPatientProbability over: [0.142, 0.156, 0.194, 0.15, 0.20, 0.50] {
+					loop times: nRun {
+						create simulation with: [seed::rnd(1000), policy::tPolicy,
+												 nPublicAmbulance::tNPublic, nPrivateAmbulance::fixedNPrivateAmbulance, nCar::fixedNCar,
+												 patientCreationProbability::tPatientProbability];
+					}
+				}
+			}
+		}
 	}
 	
   	reflex stopExp {
@@ -37,22 +56,76 @@ experiment 'Batch Exp' type:gui {
   			date firstdate <- date("2016-8-31T0:00:0+09:00");
   			date today <- date("now");
   			string resultID <- string(int(today - firstdate));
-  			string filename <- resultID + "_result.csv";
+  			string filename <- "../results/" + resultID + "_result.csv";
   			
   			// write header to the result CSV file
-			save ["Simulation", "Policy", "n_Public_Ambulance", "n_Private_Ambulance", "n_Car", "Patients_Created",
+			save ["Simulation", "Policy", "n_Public_Ambulance", "n_Private_Ambulance", "n_Car", "PatientProbability", "Patients_Created",
 				  "Public_Ambulance_Saved", "Private_Ambulance_Saved", "Car_Saved",
 				  "Dead", "Alive",
 				  "Public_Ambulance_Cost", "Private_Ambulance_Cost", "Total_Cost"
 				 ] to:filename type:"csv" header:false; // useful facet - rewrite: true
 			
-			// write data to the result file & stop simulations	 
-  			loop sim over: SoS_model {
-				save [sim.name, sim.policy, sim.nPublicAmbulance, sim.nPrivateAmbulance, sim.nCar, sim.cntPatientCreated,
+			// write data to the result file & stop simulations
+			int iGroup <- 0;
+			float avgNPublicAmbulance <- 0.00;
+			float avgNPrivateAmbulance <- 0.00;
+			float avgNCar <- 0.00;
+			float avgPatientCreated <- 0.00;
+			float avgPublicSaved <- 0.00;
+			float avgPrivateSaved <- 0.00;
+			float avgCarSaved <- 0.00;
+			float avgPatientDead <- 0.00;
+			float avgPatientAlive <- 0.00;
+			float avgCostOfPublicAmbulance <- 0.00;
+			float avgCostOfPrivateAmbulance <- 0.00;
+			float avgTotalCost <- 0.00;
+			
+  			loop sim over: SoS_model where (each.name != 'Simulation 0') {
+  				if (mod(iGroup, nRun) = 0) {
+  					iGroup <- 0;
+  					avgNPublicAmbulance <- 0.00;
+  					avgNPrivateAmbulance <- 0.00;
+					avgNCar <- 0.00;
+					avgPatientCreated <- 0.00;
+					avgPublicSaved <- 0.00;
+					avgPrivateSaved <- 0.00;
+					avgCarSaved <- 0.00;
+					avgPatientDead <- 0.00;
+					avgPatientAlive <- 0.00;
+					avgCostOfPublicAmbulance <- 0.00;
+					avgCostOfPrivateAmbulance <- 0.00;
+					avgTotalCost <- 0.00;
+  				}
+  				
+  				avgNPublicAmbulance <- avgNPublicAmbulance + sim.nPublicAmbulance;
+  				avgNPrivateAmbulance <- avgNPrivateAmbulance + sim.nPrivateAmbulance;
+  				avgNCar <- avgNCar + sim.nCar;
+  				avgPatientCreated <- avgPatientCreated + sim.cntPatientCreated;
+  				avgPublicSaved <- avgPublicSaved + sim.cntPublicSaved;
+  				avgPrivateSaved <- avgPrivateSaved + sim.cntPrivateSaved;
+  				avgCarSaved <- avgCarSaved + sim.cntCarSaved;
+  				avgPatientDead <- avgPatientDead + sim.cntPatientDead;
+  				avgPatientAlive <- avgPatientAlive + length(sim.patient);
+				avgCostOfPublicAmbulance <- avgCostOfPublicAmbulance + sim.costOfPublicAmbulance;
+				avgCostOfPrivateAmbulance <- avgCostOfPrivateAmbulance + sim.costOfPrivateAmbulance;
+				avgTotalCost <- avgTotalCost + (sim.costOfPublicAmbulance+sim.costOfPrivateAmbulance);
+  				
+				save [sim.name, sim.policy, sim.nPublicAmbulance, sim.nPrivateAmbulance, sim.nCar, sim.patientCreationProbability, sim.cntPatientCreated,
 	  				  sim.cntPublicSaved, sim.cntPrivateSaved, sim.cntCarSaved,
 					  sim.cntPatientDead, length(sim.patient),
 	  				  sim.costOfPublicAmbulance, sim.costOfPrivateAmbulance, (sim.costOfPublicAmbulance+sim.costOfPrivateAmbulance)
 	  				 ] to:filename type:"csv" header:false;
+	  			
+	  			if (mod(iGroup, nRun) = nRun - 1) {
+	  				save ['AveragedSim', sim.policy, avgNPublicAmbulance/nRun, avgNPrivateAmbulance/nRun, avgNCar/nRun, sim.patientCreationProbability,
+					  avgPatientCreated/nRun,
+	  				  avgPublicSaved/nRun, avgPrivateSaved/nRun, avgCarSaved/nRun,
+					  avgPatientDead/nRun, avgPatientAlive/nRun,
+	  				  avgCostOfPublicAmbulance/nRun, avgCostOfPrivateAmbulance/nRun, avgTotalCost/nRun
+	  				 ] to:filename type:"csv" header:false;
+	  			}
+	  			
+	  			iGroup <- iGroup + 1;
 	  		}
   		}
   	}

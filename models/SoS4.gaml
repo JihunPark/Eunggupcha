@@ -9,11 +9,11 @@
 model SoS
 
 experiment 'Batch Exp' type:gui {
-	int maxCycle <- 10000;
-	int nRun <- 10;
+	int maxCycle <- 5000;
+	int nRun <- 3;
 	
 	/* Fixed Variables */
-	int fixedPolicy <- 2;
+	int fixedPolicy <- 1;
 	int fixedNPublicAmbulance <- 6;
 	int fixedNPrivateAmbulance <- 0;
 	int fixedNCar <- 0;
@@ -30,14 +30,15 @@ experiment 'Batch Exp' type:gui {
 //		list<float> simParamValues <- [0.00, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45,
 //									   0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95, 1.00];
 		
-		float tNPublic <- 0.00;
+		float tPatientProbability <- 0.00; 
 		
-		loop tPolicy from:1 to: 3 {
-			loop tNPublic over: [3, 5, 7, 9, 11] {
-				loop tPatientProbability over: [0.142, 0.156, 0.194, 0.15, 0.20, 0.50] {
+		loop tNPrivate over: [1, 2] {
+			loop tNPublic over: [3, 4] {
+				loop i from: 0 to: 20 {
+					tPatientProbability <- i / 20;
 					loop times: nRun {
-						create simulation with: [seed::rnd(1000), policy::tPolicy,
-												 nPublicAmbulance::tNPublic, nPrivateAmbulance::fixedNPrivateAmbulance, nCar::fixedNCar,
+						create simulation with: [seed::rnd(1000), policy::fixedPolicy,
+												 nPublicAmbulance::tNPublic, nPrivateAmbulance::tNPrivate, nCar::fixedNCar,
 												 patientCreationProbability::tPatientProbability];
 					}
 				}
@@ -233,7 +234,7 @@ global {
 		// create world
 		create road from: roads_shapefile;
 		road_network <- as_edge_graph(road);
-		create building from: buildings_shapefile; 
+		create building from: buildings_shapefile;
     	
     	loop i from:0 to: nHospital - 1 {
     		create hospital {
@@ -339,27 +340,28 @@ species patient skills:[moving] {
 			// private ambulance 요청
 //			privateAmbulance askPAmbulance <- (privateAmbulance) closest_to (self);
 			
-			privateAmbulance askPAmbulance <- nil;
-			
-			loop d from:1 to:ambulanceSearchDistance{
-				privateAmbulance candidate <- one_of (privateAmbulance at_distance d);
-				if (candidate!=nil and candidate.targetPatient=nil and candidate.ridePatient=nil){
-					askPAmbulance <- candidate;
-					if(printLog){write self.name+": "+candidate.name+" at distance of "+d+" will save myself";}
-					break;
+				privateAmbulance askPAmbulance <- nil;
+				
+				loop d from:1 to:ambulanceSearchDistance{
+					privateAmbulance candidate <- one_of (privateAmbulance at_distance d);
+					if (candidate!=nil and candidate.targetPatient=nil and candidate.ridePatient=nil){
+						askPAmbulance <- candidate;
+						if(printLog){write self.name+": "+candidate.name+" at distance of "+d+" will save myself";}
+						break;
+					}
 				}
-			}
-			
-			if(askPAmbulance!=nil){
-				ask askPAmbulance{
-					targetPatient<-myself;
+				
+				if(askPAmbulance!=nil){
+					ask askPAmbulance{
+						targetPatient<-myself;
+					}
+					isTargeted <- true;
+					waitingAmbulance <- askPAmbulance;
+					
+					costOfPrivateAmbulance <- costOfPrivateAmbulance + costPrivateAmbulancePerEvent;
 				}
-				isTargeted <- true;
-				waitingAmbulance <- askPAmbulance;
-			}
 			}
 		}
-		
 		
 		if(waitingAmbulance!=nil and waitingAmbulance.targetPatient!=self){
 			if(printLog){write "[Error2]: "+self.name+" is waiting "+waitingAmbulance+", but it is not targeting this patient.";}
@@ -438,9 +440,9 @@ species EmergencyCar skills:[moving] {
 			do recover;
 		}
 		
-		if(self is privateAmbulance){
-			costOfPrivateAmbulance <- costOfPrivateAmbulance + costPrivateAmbulancePerEvent;
-		}
+//		if(self is privateAmbulance){
+//			costOfPrivateAmbulance <- costOfPrivateAmbulance + costPrivateAmbulancePerEvent;
+//		}
 		
 		ridePatient <- nil;
 		targetHospital<-nil;
@@ -477,7 +479,12 @@ species publicAmbulance parent:EmergencyCar {
 		// 기본 조건: 뭔가 타고 있지 않고, 나랑 위치가 같지 않음. 다른 ambulance 에 의해 target 되지 않음
 		
 		if(policy = 1) {
-			// Policy 1 : 제일 가까운 patient 를 고름
+			// Policy1: 환자가 생기는 순서대로 구하기
+			patient candidate <- first_with (patient, !each.inHospital and each.rideEmergencyCar=nil and !each.isTargeted);
+			targetPatient <- candidate;
+			if(printLog){write self.name+": patient "+targetPatient.name+" will be saved by me by the rule of FIFO";}
+		} else if(policy = 2) {
+			// Policy2 : 제일 가까운 patient 를 고름
 			loop d from:1 to:ambulanceSearchDistance{
 				patient candidate <- one_of (patient at_distance d);
 				if (candidate!=nil and !candidate.inHospital and candidate.rideEmergencyCar=nil and !candidate.isTargeted){
@@ -486,11 +493,6 @@ species publicAmbulance parent:EmergencyCar {
 					break;
 				}
 			}
-		} else if(policy = 2) {
-			// Policy2: 환자가 생기는 순서대로 구하기
-			patient candidate <- first_with (patient, !each.inHospital and each.rideEmergencyCar=nil and !each.isTargeted);
-			targetPatient <- candidate;
-			if(printLog){write self.name+": patient "+targetPatient.name+" will be saved by me by the rule of FIFO";}
 		} else if(policy = 3) {
 			// Policy3: 환자의 생명력이 짧은 순서대로 구하기
 			list<patient> sortedlist <- (where(patient, !each.inHospital and each.rideEmergencyCar=nil and !each.isTargeted) sort_by (each.timeAlive));

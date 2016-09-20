@@ -10,14 +10,14 @@ model SoS
 
 experiment 'Batch Exp' type:gui {
 	int maxCycle <- 5000;
-	int nRun <- 25;
+	int nRun <- 22;
 	
 	/* Fixed Variables */
 	int fixedPolicy <- 1;
 	int fixedNPublicAmbulance <- 6;
 	int fixedNPrivateAmbulance <- 0;
 	int fixedNCar <- 0;
-	float fixedPatientCreationProbability <- 0.20;	
+	float fixedPatientCreationProbability <- 0.20;
 	
 	/* Discarded Simulation */
 	parameter name:"policy:" var:policy init:0;
@@ -27,26 +27,22 @@ experiment 'Batch Exp' type:gui {
 	parameter name:"patientCreationProbability:" var:patientCreationProbability init:0.00;
 	
 	init {
-		list<float> simParamValues <- //[0.30, 0.35, 0.40, 0.45, 0.50];
-//									   [0.05, 0.10, 0.15, 0.20, 0.25];
-									   [0.55, 0.60, 0.65, 0.70, 0.75];
-//									   [0.80, 0.85, 0.90, 0.95, 1.00];
+		list<float> simParamValues <- [0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95, 1.00];
 		
 		float tPatientProbability <- 0.00; 
 		
 		loop tPatientProbability over: simParamValues {
 			loop times: nRun {
 				create simulation with: [seed::rnd(1000), policy::fixedPolicy,
-										 nPublicAmbulance::4, nPrivateAmbulance::1, nCar::fixedNCar,
+										 nPublicAmbulance::0, nPrivateAmbulance::0, nCar::10,
 										 patientCreationProbability::tPatientProbability];
 			}
 		}
 		
-//		loop i from: 0 to: 20 {
-//			tPatientProbability <- i / 20;
+//		loop tPatientProbability over: simParamValues {
 //			loop times: nRun {
 //				create simulation with: [seed::rnd(1000), policy::fixedPolicy,
-//										 nPublicAmbulance::4, nPrivateAmbulance::1, nCar::fixedNCar,
+//										 nPublicAmbulance::0, nPrivateAmbulance::0, nCar::20,
 //										 patientCreationProbability::tPatientProbability];
 //			}
 //		}
